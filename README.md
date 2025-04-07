@@ -7,11 +7,11 @@ April 2025
 Use BeautifulSoup to scrape Pokemon data and convert into Pandas DataFrame
 
 ## Required Dependencies
-from bs4 import BeautifulSoup
-from requests import get
-import pandas as pd
-from urllib.parse import urljoin
-import time
+* from bs4 import BeautifulSoup
+* from requests import get
+* import pandas as pd
+* from urllib.parse import urljoin
+* import time
 
 ## PURPOSE
 The purpose of my code is to scrape from the website `https://pokemondb.net` and obtain all of the unique Pokemon and the respective data. The data is then converted into a pandas dataframe, which is finally exported as a .csv file.
