@@ -1,5 +1,5 @@
 # Pokémon Database Scraper
-*Written by Lily Gates* 
+*Written by Lily Gates*   
 *April 2025*
 
 ## Description
