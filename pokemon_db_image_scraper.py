@@ -4,7 +4,7 @@
 # Date: May 2025
 # Description:
 # Scrapes Pokémon names and image links from pokemondb.net,
-# downloads each Pokémon's official artwork, and saves it locally.
+# downloads each Pokémon's image, and saves it locally.
 # Features:
 # - Avoids duplicate downloads (tracked via text file)
 # - Retries failed downloads
@@ -68,100 +68,99 @@ link_frame = pd.DataFrame({
 # --------------------------------------------
 # Create folder to store images
 folder_name = "pokemon_images"
-os.makedirs(folder_name, exist_ok=True)
+os.makedirs(folder_name, exist_ok=True)  # Ensure folder exists, if not, make
 
-# File to store progress of downloaded Pokémon
-progress_file = "downloaded_pokemon.txt"
-
-# Retry limit for failed downloads
+# Number of times to retry downloading an image if it fails
 retry_limit = 3
 
-# Ensure the progress file exists
-if not os.path.exists(progress_file):
-    with open(progress_file, 'w') as f:
-        pass  # Just create an empty file
-
-# Load previously downloaded Pokémon to skip them
-if os.path.exists(progress_file):
-    with open(progress_file, "r") as f:
-        downloaded = set(line.strip() for line in f)
-else:
-    downloaded = set()
+delay_between_requests = 1  # Seconds
 
 # --------------------------------------------
 # STEP 5: DOWNLOAD IMAGES
 # --------------------------------------------
-
-
 total = len(link_frame)
+start_time = time.time()
+failed_pokemon = []
 
-for index, row in link_frame.iterrows():
-    poke_name = row['pokemon'].lower().replace(' ', '_')
+for counter, (_, row) in enumerate(link_frame.iterrows(), start=1):
     """
-    Usage:
-    - Iterates through a DataFrame of Pokémon names and URLs and downloads the artwork image
-    - Skips Pokémon that have already been downloaded (tracked via a progress file)
-    - Retries failed downloads up to a specified retry limit
-    - Adds delays between requests to avoid overloading the server
+    Iterates through a DataFrame of Pokémon names and URLs to download their artwork images.
+
+    Features:
+    - Skips Pokémon that have already been downloaded (tracked via a progress file).
+    - Attempts to download the official artwork image; falls back to sprite image if artwork is missing.
+    - Retries failed downloads up to a specified retry limit.
+    - Adds delays between requests to avoid overloading the server.
+    - Tracks and displays progress, including estimated time remaining.
 
     Parameters:
-    - link_frame (pd.DataFrame): A DataFrame containing Pokémon names and their corresponding detail page URLs.
-    - downloaded (set): A set of Pokémon names already downloaded (read from a progress file).
-    - folder_name (str): Path to the folder where images will be saved.
-    - progress_file (str): Path to the text file tracking downloaded Pokémon.
-    - retry_limit (int): Maximum number of retry attempts per Pokémon on failure.
-    - total (int): Total number of Pokémon in the list (used for progress printing).
+    - link_frame (pd.DataFrame): A DataFrame with 'pokemon' and 'url' columns, containing Pokémon names and their detail page URLs.
+    - downloaded (set): Set of Pokémon names already downloaded (read from a progress file).
+    - folder_name (str): Directory path where downloaded images will be saved.
+    - progress_file (str): Path to a file that logs downloaded Pokémon names.
+    - retry_limit (int): Number of retry attempts allowed per Pokémon if an error occurs.
+    - total (int): Total number of Pokémon entries (used for status display).
 
     Returns:
-    - For each Pokémon, fetches its individual page, extracts the official artwork image URL,
-    downloads the image, and saves it using a formatted filename.
-    - Logs status messages to the console throughout the process.
-    - Adds each successfully processed Pokémon to the progress file to prevent re-downloading.
+    - Saves each downloaded image with a standardized filename format: "<poke_name>_image.jpg".
+    - Prints status updates to the console, including progress, retries, and estimated remaining time.
+    - Updates the progress file and `downloaded` set to prevent duplicate work.
     """
+    poke_name = row['pokemon'].lower().replace(' ', '_')
+    poke_url = row['url']
+    img_filename = f"{poke_name}_image.jpg"
+    img_path = os.path.join(folder_name, img_filename)
 
-    # Skip already downloaded Pokémon
-    if poke_name in downloaded:
-        print(f"Skipping {poke_name.title()} (already downloaded)")
+    # Skip if image already exists
+    if os.path.exists(img_path):
+        print(f"Skipping {poke_name.title()} (image already exists)\n")
         continue
 
-    poke_url = row['url']
-    print(f"Downloading image {index + 1} of {total}: {poke_name.title()}")
+    remaining_total = total - counter
+    elapsed_time = time.time() - start_time
+    avg_time = elapsed_time / counter
+    est_remaining = avg_time * remaining_total
+    mins, secs = divmod(int(est_remaining), 60)
+
+    print(f"Downloading image {counter} of {total}: {poke_name.title()}")
+    print(f"Remaining: {remaining_total} | Estimated time left: {mins}m {secs}s")
 
     attempts = 0
     while attempts < retry_limit:
         try:
-            # Get Pokémon page
             page = get(poke_url)
             if page.status_code != 200:
                 raise Exception(f"Failed to get page, status code {page.status_code}")
 
             soup = BeautifulSoup(page.content, 'html.parser')
+
+            # Try official artwork
+            image_url = None
             artwork_tag = soup.select_one('a[rel="lightbox"]')
-
-            # If artwork link found, download image
             if artwork_tag and artwork_tag.has_attr('href'):
-                artwork_url = artwork_tag['href']
-                img_resp = get(artwork_url)
+                image_url = artwork_tag['href']
+            else:
+                # Try fallback sprite
+                sprite_tag = soup.select_one('img[src*="/sprites/"]')
+                if sprite_tag and sprite_tag.has_attr('src'):
+                    image_url = sprite_tag['src']
+                    # Fix malformed or protocol-relative URL
+                    if image_url.startswith('//'):
+                        image_url = 'https:' + image_url
+                    elif image_url.startswith('/'):
+                        image_url = 'https://img.pokemondb.net' + image_url
 
+            if image_url:
+                img_resp = get(image_url)
                 if img_resp.status_code == 200:
-                    img_path = os.path.join(folder_name, f"{poke_name}_image.jpg")
                     with open(img_path, 'wb') as f:
                         f.write(img_resp.content)
                     print(f"Saved image to {img_path}\n")
-
-                    # Record progress
-                    with open(progress_file, "a") as f:
-                        f.write(poke_name + "\n")
-                    downloaded.add(poke_name)
                     break
                 else:
                     raise Exception(f"Failed to download image, status code {img_resp.status_code}")
             else:
-                print(f"No artwork image found for {poke_name.title()}\n")
-                # Still record progress so we skip next time
-                with open(progress_file, "a") as f:
-                    f.write(poke_name + "\n")
-                downloaded.add(poke_name)
+                print(f"No artwork or sprite found for {poke_name.title()}\n")
                 break
 
         except Exception as e:
@@ -169,8 +168,21 @@ for index, row in link_frame.iterrows():
             print(f"Attempt {attempts} failed for {poke_name.title()}: {e}")
             if attempts == retry_limit:
                 print(f"Skipping {poke_name.title()} after {retry_limit} failed attempts\n")
+                failed_pokemon.append(poke_name)
             else:
                 print("Retrying...\n")
-            time.sleep(2)  # Wait before retrying
+            time.sleep(2)  # wait before retry
 
-    time.sleep(1)  # Be polite to the server
+    time.sleep(delay_between_requests)
+
+# Log failures
+if failed_pokemon:
+    print("\nThe following Pokémon failed to download:")
+    for name in failed_pokemon:
+        print(f"- {name.title()}")
+
+    with open("failed_pokemon.txt", "w") as f:
+        for name in failed_pokemon:
+            f.write(name + "\n")
+else:
+    print("\nAll Pokémon images downloaded successfully!")
