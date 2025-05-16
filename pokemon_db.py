@@ -49,7 +49,6 @@ link_frame = pd.DataFrame({
     'pokemon': unique_pokemon,
     'url': unique_links
 })
-
 # --------------------------------------------
 # STEP 3: INITIALIZE DATA STRUCTURE
 # --------------------------------------------
@@ -77,48 +76,101 @@ pokedex_dict = {
 # STEP 4: DEFINE SCRAPER FUNCTION
 # --------------------------------------------
 
+
 def pokemon_scraper(poke_content, pokedex_dict):
     """
-    Extracts detailed Pokémon info from a BeautifulSoup page object.
-    Updates pokedex_dict in place.
+    Extract detailed Pokémon data from a BeautifulSoup-parsed page and 
+    append the extracted information to the provided dictionary.
+
+    Args:
+        poke_content (bs4.BeautifulSoup): Parsed HTML content of a Pokémon's webpage.
+        pokedex_dict (dict): Dictionary with lists that stores Pokémon data fields 
+                             such as name, stats, types, and more.
+
+    Returns:
+        None: This function updates pokedex_dict in place by appending new data.
+
+    The function extracts the following data fields for each Pokémon:
+        - poke_name_from_link: Pokémon name as shown in the page's <h1> header.
+        - pokedex_num: National Pokédex number (string).
+        - elem_1: Primary elemental type (string).
+        - elem_2: Secondary elemental type or None if absent.
+        - species: Species category (string).
+        - height_meters: Height in meters (float).
+        - weight_kg: Weight in kilograms (float).
+        - male: Percentage male (float), 0 if genderless.
+        - female: Percentage female (float), 0 if genderless.
+        - hp: Hit Points stat (int).
+        - attack: Attack stat (int).
+        - defense: Defense stat (int).
+        - sp_atk: Special Attack stat (int).
+        - sp_def: Special Defense stat (int).
+        - speed: Speed stat (int).
+        - total: Total base stats (int).
+
+    Notes:
+        - The function assumes the webpage structure is consistent with the 
+          'vitals-table' CSS class used in the official Pokémon wiki or similar.
+        - It handles genderless Pokémon by setting male and female percentages to zero.
+        - Pokedex description entries are extracted but not appended to the dictionary 
+          in this version (can be added if needed).
     """
-
+    
+    # Pokemon name
     poke_name_from_link = poke_content.select('h1')[0].string
+    
+    # Locate the table that contains the data
     pokedex_data = poke_content.select('table[class="vitals-table"]')
-
+    
+    # National Pokedex Number
     pokedex_num = pokedex_data[0].select('td')[0].contents[0].string
-
+    
+    # Element type(s)
     elem_type = list(pokedex_data[0].select('td')[1].children)
-    elements = [x.string for x in elem_type if not str(x).isspace()]
+    elements = []
+    for x in elem_type:
+        if not str(x).isspace():
+            elements.append(x.string)
     elem_1 = elements[0]
-    elem_2 = elements[1] if len(elements) > 1 else None
-
+    elem_2 = None
+    if len(elements) > 1:  # Sometimes there is more than one type
+        elem_2 = elements[1]
+    
+    # Species
     species = pokedex_data[0].select('td')[2].string
-
-    height = pokedex_data[0].select('td')[3].string.replace(u'\xa0', '')
+    
+    # Height
+    height = pokedex_data[0].select('td')[3].string.replace(u'\xa0','')
     height_meters = float(height.split('m')[0])
 
-    weight = pokedex_data[0].select('td')[4].string.replace(u'\xa0', '')
+    # Weight
+    weight = pokedex_data[0].select('td')[4].string.replace(u'\xa0','')
     weight_kg = float(weight.split('kg')[0])
 
+    # Gender
     gender = list(pokedex_data[2].select('td')[1].children)
-    gender_stats = [x.string for x in gender if not str(x).isspace()]
+    gender_stats = []
+    for x in gender:
+        if not str(x).isspace():
+            gender_stats.append(x.string)
+
     if "Genderless" in gender_stats:
-        male = female = 0.0
+        male = float(0)
+        female = float(0)
     else:
-        male = float(gender_stats[0].split('%')[0])
-        female = float(gender_stats[2].split('%')[0])
+        male = float(gender_stats[0].split('%')[0])  # Extracts only the percent digits
+        female = float(gender_stats[2].split('%')[0])  # Extracts only the percent digits
 
-    stats_table = pokedex_data[3].select('tr')
-    hp = int(stats_table[0].select('td')[1].string)
-    attack = int(stats_table[1].select('td')[1].string)
-    defense = int(stats_table[2].select('td')[1].string)
-    sp_atk = int(stats_table[3].select('td')[1].string)
-    sp_def = int(stats_table[4].select('td')[1].string)
-    speed = int(stats_table[5].select('td')[1].string)
-    total = int(stats_table[6].select('td')[1].string)
-
-    # Append all extracted values
+    # Fighting Stats
+    hp = int(list(pokedex_data[3].select('tr')[0])[3].string)
+    attack = int(list(pokedex_data[3].select('tr')[1])[3].string)
+    defense = int(list(pokedex_data[3].select('tr')[2])[3].string)
+    sp_atk = int(list(pokedex_data[3].select('tr')[3])[3].string)
+    sp_def = int(list(pokedex_data[3].select('tr')[4])[3].string)
+    speed = int(list(pokedex_data[3].select('tr')[5])[3].string)
+    total = int(list(pokedex_data[3].select('tr')[6])[3].string)
+    
+    # Append elements in the list for each key
     pokedex_dict['poke_name_from_link'].append(poke_name_from_link)
     pokedex_dict['pokedex_num'].append(pokedex_num)
     pokedex_dict['elem_1'].append(elem_1)
@@ -140,14 +192,28 @@ def pokemon_scraper(poke_content, pokedex_dict):
 # STEP 5: LOOP THROUGH URLS AND SCRAPE DATA
 # --------------------------------------------
 
+# --------------------------------------------
+# STEP 5: LOOP THROUGH URLS AND SCRAPE DATA
+# --------------------------------------------
+
 print("\n=== FETCHING AND SAVING POKÉMON DATA... ===\n")
 
+# Iterate over each Pokémon URL in the link_frame DataFrame
+# 'enumerate' is used to keep track of progress (count) starting from 1
 for count, poke_site in enumerate(link_frame['url'], start=1):
+    # Send an HTTP GET request to the Pokémon’s individual page
     page = get(poke_site)
+    
+    # Parse the HTML content of the page using BeautifulSoup
     poke_content = BeautifulSoup(page.content, "html.parser")
+    
+    # Extract relevant Pokémon data from the page and append it to the pokedex_dict
     pokemon_scraper(poke_content, pokedex_dict)
-
+    
+    # Print progress update showing how many Pokémon have been processed out of total
     print(f"{count} of {len(link_frame['url'])} complete")
+    
+    # Pause for 1 second between requests to avoid overloading the server (politeness)
     time.sleep(1)
 
 # --------------------------------------------
@@ -163,10 +229,10 @@ final_df = merged_df.drop(columns=["poke_name_from_link"])
 file_name = "pokemon_db.csv"
 final_df.to_csv(file_name, index=False)
 
-print(f"\n✅ Data saved successfully to '{file_name}'")
+print(f"\nData saved successfully as '{file_name}'")
 
 # --------------------------------------------
-# STEP 7: OPTIONAL - READ CSV FOR VERIFICATION
+# STEP 7: READ CSV FOR VERIFICATION
 # --------------------------------------------
 
 pokemon_csv = pd.read_csv(file_name)
