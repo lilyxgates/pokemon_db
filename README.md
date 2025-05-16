@@ -4,15 +4,37 @@
 
 
 ## Description  
-This Python script scrapes Pokémon data from the Pokémon Database website (`https://pokemondb.net`) using BeautifulSoup and converts the data into a Pandas DataFrame. The resulting dataset includes key Pokémon attributes such as base stats, types, species, height, weight, and gender ratios, and is saved as a `.csv` file for further analysis.
+The `pokemon_db.py` script scrapes Pokémon data from the Pokémon Database website (`https://pokemondb.net`) using BeautifulSoup and converts the data into a Pandas DataFrame. The resulting dataset includes key Pokémon attributes such as base stats, types, species, height, weight, and gender ratios, and is saved as a `.csv` file for further analysis.
 
+The `pokemon_db_image_scraper.py` script will scrape all images of each Pokémon from the Pokémon Database website (`https://pokemondb.net`) using BeautifulSoup. The files saved and organized in a folder called `pokemon_images` within the current working directory that the file is run on.
 
-## Required Dependencies  
-- `beautifulsoup4`  
-- `requests`  
-- `pandas`  
-- `urllib.parse`  
-- `time`  
+The `pokemon_dataviz.py` script will create data visualizations to help aide in analyzing the data scraped from both `pokemon_db.py` and `pokemon_db_image_scraper.py`.
+
+## Required Dependencies
+
+For `pokemon_db.py`
+- time (built-in)
+- bs4 (BeautifulSoup)
+- urllib3 (for urljoin from urllib.parse)
+- requests
+- pandas
+
+- For `pokemon_db_image_scraper.py`
+- os (built-in)
+- time (built-in)
+- bs4 (BeautifulSoup)
+- urllib3 (for urljoin from urllib.parse)
+- requests
+- pandas
+
+For `pokemon_dataviz.py`
+- os (built-in)
+- datetime (built-in)
+- numpy
+- pandas
+- scipy
+- matplotlib
+- seaborn
 
 
 ## Purpose  
@@ -20,14 +42,14 @@ The goal of this project is to collect comprehensive data on all **unique** Pok�
 
 
 ## Usage  
-Run the Python script to scrape the data and automatically save it to `pokemon_db.csv`. You can then load this CSV in any data analysis environment, such as Jupyter notebooks or Excel, to explore Pokémon traits and stats.
+Run the `pokemon_db.py` script to scrape the data and automatically save it to `pokemon_db.csv`. You can then load this CSV in any data analysis environment, such as Jupyter notebooks or Excel, to explore Pokémon traits and stats.
 
 
 ## Reflection
 
 ### Future Improvements  
 - **Handling Duplicates:** The script currently excludes duplicate forms like Mega Evolutions because although duplicates appear on the main page, they link to the same URL with tabbed content. Scraping these tabs would require more complex navigation and parsing. Focusing on base forms reduced the total Pokémon scraped from 1,125 to 1,025.  
-- **Additional Attributes:** Some data points, such as Pokémon "Attributes" (including hidden abilities), were not included due to inconsistent formatting that made automated scraping difficult. These could be added in future iterations with more advanced parsing or manual curation.
+- **Additional Attributes:** Some data points, such as Pokémon "Attributes" (including hidden abilities) and "Evolution Chain" were not included due to inconsistent formatting that made automated scraping difficult. These could be added in future iterations with more advanced parsing or manual curation.
 
 ### Demonstration: How This Data Can Be Used  
 Game designers or researchers can use this dataset to analyze the balance of Pokémon types and stats. For example:
