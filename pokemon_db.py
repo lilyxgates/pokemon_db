@@ -44,8 +44,8 @@ for i in pokemon_names:
     if i not in unique_pokemon:
         unique_pokemon.append(i)
 
-print(f"Total number of UNIQUE Pokemon in database: {len(unique_pokemon)}")
-print(unique_pokemon[:10])  # Display first 10 unique Pokemon names
+#print(f"Total number of UNIQUE Pokemon in database: {len(unique_pokemon)}")
+#print(unique_pokemon[:10])  # Display first 10 unique Pokemon names
 
 # Similarly, create a unique list of full URLs to avoid duplicates
 unique_links = []
@@ -176,6 +176,8 @@ def pokemon_scraper(poke_content, pokedex_dict):
 # LOOP THROUGH EACH UNIQUE POKEMON URL AND SCRAPE DATA
 # -------------------------
 
+print("\Fetching and Saving Pokémon Data...\n")
+
 count = 0
 
 for poke_site in link_frame['url']:
@@ -217,6 +219,7 @@ final_df = merged_df.drop(columns=["poke_name_from_link"])
 # Save the final DataFrame to a CSV file
 file_name = "pokemon_db.csv"
 final_df.to_csv(file_name, index=False)
+print(f"A .CSV file '{file_name}' has been saved to the current working directory.")
 
 # -------------------------
 # READ CSV BACK INTO PANDAS (to verify or further process)
