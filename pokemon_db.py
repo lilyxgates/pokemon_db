@@ -176,7 +176,7 @@ def pokemon_scraper(poke_content, pokedex_dict):
 # LOOP THROUGH EACH UNIQUE POKEMON URL AND SCRAPE DATA
 # -------------------------
 
-print("\Fetching and Saving Pokémon Data...\n")
+print("\n=== FETCHING AND SAVING POKÉMON DATA... ===\n")
 
 count = 0
 
