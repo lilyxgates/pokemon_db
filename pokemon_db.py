@@ -1,173 +1,151 @@
 # Lily Gates
-# April 2025
-# Pokemon Database Web Scraper
+# May 2025
 
-from bs4 import BeautifulSoup
+# --- IMPORTS AND SETUP ---
 from requests import get
+from bs4 import BeautifulSoup
 import pandas as pd
-from urllib.parse import urljoin
 import time
+from urllib.parse import urljoin
 
-######################
-# SCRAPE THE MAIN PAGE
-######################
-url = 'https://pokemondb.net/pokedex/all'  # Specific link to the database
-base_url = 'https://pokemondb.net'  # Base URL for subsequent Pokemon links
-# Get site
+# -------------------------
+# SCRAPE DATA USING BEAUTIFUL SOUP
+# -------------------------
+
+# Define the main URL for scraping all Pokemon data
+url = 'https://pokemondb.net/pokedex/all'  # Full Pokemon database page
+base_url = 'https://pokemondb.net'          # Base URL to join with relative links
+
+# Request the page content
 site = get(url)
 
-# Parse the content, return raw HTML content
+# Parse the raw HTML content using BeautifulSoup
 content = BeautifulSoup(site.content, "html.parser")
 
-# Return the Response Code (200 = it is working)
-#site.status_code
-#print(site)  
-
-# Prints the HTML parsed
-#print(content)  
-#len(content)
-
-###############################
-# SELECT SPECIFIC POKEMON PAGES
-###############################
-
-# Selecting the links to specific Pokemon pages
+# Select all anchor tags containing Pokemon names (class="ent-name")
 anchor_elem = content.select('a[class="ent-name"]')                
-print(f"Total number of ALL Pokemon in database: {len(anchor_elem)}")  # Total number of Pokemon: 1215
 
-# LINKS
-# Link to the first Pokemon
-anchor_elem[0].get('href')
-
-# Generator expression to create list of all href
+# Extract all href links for each Pokemon using a list comprehension
 list_of_links = [i.get('href') for i in anchor_elem]
-list_of_links[:10]  # Show partial links to the first 10 Pokemon
 
-# Combine base_url with specific href for first Pokemon
-full_url = urljoin(base_url, anchor_elem[0].get('href'))
-#print(full_url)
+# Generate full URLs for each Pokemon by joining base URL with relative hrefs
+completed_links = [urljoin(base_url, i.get('href')) for i in anchor_elem]
 
-completed_links = [urljoin(base_url, i.get('href')) for i in content.select('a[class="ent-name"]')]
-completed_links[:10]  # Show full links to the first 10 Pokemon
+# Extract all Pokemon names (text inside anchor elements)
+pokemon_names = [x.string for x in anchor_elem]
 
-# POKEMON NAMES
-# Get names of Pokemon
-# Generator expression, for each anchor element, retrieve string (name of Pokemon)
-pokemon_names = [x.string for x in content.select('a[class="ent-name"]')]              
-pokemon_names[:10]  # Show names of the first 10 TOTAL Pokemon (including potential duplicates)
+# -------------------------
+# REMOVE DUPLICATE POKEMON NAMES AND LINKS
+# -------------------------
 
-###########################
-# REMOVING DUPLICATE VALUES
-###########################
-
-# Create a unique list of only unique Pokemon names
-# Note: Some Pokemon share the same URL, but different names based on unique version (e.g., Venusaur vs. Mega Venusaur)
-
+# Initialize empty lists to store unique Pokemon names and links
 unique_pokemon = []
-
 for i in pokemon_names:
     if i not in unique_pokemon:
         unique_pokemon.append(i)
-        
-print(f"Total number of UNIQUE Pokemon in database: {len(unique_pokemon)}")  # # Number of unique Pokemon: 1025
 
-#print(unique_pokemon[:10])  # Show names of the first 10 UNIQUE Pokemon
+print(f"Total number of UNIQUE Pokemon in database: {len(unique_pokemon)}")
+print(unique_pokemon[:10])  # Display first 10 unique Pokemon names
 
-# Create a list of only unique complete URLs
-# Note: Some Pokemon share the same URL, but different names based on unique version (e.g., Venusaur vs. Mega Venusaur)
-
+# Similarly, create a unique list of full URLs to avoid duplicates
 unique_links = []
-
 for i in completed_links:
     if i not in unique_links:
         unique_links.append(i)
-        
-#print(unique_links[:10])  # Show full links to the first 10 Pokemon
 
-##############################################
-# DATAFRAME OF UNIQUE POKEMON AND UNIQUE LINKS
-##############################################
+# -------------------------
+# CREATE DATAFRAME WITH UNIQUE POKEMON NAMES AND LINKS
+# -------------------------
 
-# Dataframe of unique_pokemon and unique_links
-link_frame = pd.DataFrame({'pokemon': unique_pokemon, 'url': unique_links})
-link_frame.head()
+link_frame = pd.DataFrame({
+    'pokemon': unique_pokemon,
+    'url': unique_links
+})
 
-#####################################################
-# MAIN FUNCTION FOR SCRAPING AND STORING IN DICTIONARY
-#####################################################
+# -------------------------
+# DEFINE FUNCTION TO SCRAPE DETAILED DATA FOR EACH POKEMON
+# -------------------------
 
+pokedex_dict = {
+    'poke_name_from_link': [],
+    'pokedex_num': [],
+    'elem_1': [],
+    'elem_2': [],
+    'species': [],
+    'height_meters': [],
+    'weight_kg': [],
+    'male': [],
+    'female': [],
+    'hp': [],
+    'attack': [],
+    'defense': [],
+    'sp_atk': [],
+    'sp_def': [],
+    'speed': [],
+    'total': []
+}
 
-pokedex_dict = {'poke_name_from_link': [],
-                'pokedex_num': [],
-                'elem_1': [],
-                'elem_2': [],
-                'species': [],
-                'height_meters': [],
-                'weight_kg': [],
-                'male': [],
-                'female': [],
-                'hp': [],
-                'attack': [],
-                'defense': [],
-                'sp_atk': [],
-                'sp_def': [],
-                'speed': [],
-                'total': []
-                }
+# SCRAPER FUNCTION TO EXTRACT DETAILED POKEMON DATA FROM EACH PAGE
 
 def pokemon_scraper(poke_content, pokedex_dict):
     """
-    Args
-        poke_content: bs4 content after parsing each page
-        pokedex_dict: output with specific stats for each pokemon
+    Parses the HTML content of a Pokemon's page and extracts key information 
+    about the Pokemon such as stats, type, species, gender ratio, and physical attributes.
+    
+    Args:
+        poke_content (BeautifulSoup object): Parsed HTML content of the Pokemon page.
+        pokedex_dict (dict): Dictionary to append the extracted data into.
+        
+    Updates pokedex_dict in place by appending the following keys:
+        - poke_name_from_link: Pokemon's name from the page header
+        - pokedex_num: National Pokedex number
+        - elem_1, elem_2: Primary and secondary element types
+        - species: Pokemon species description
+        - height_meters: Height in meters (float)
+        - weight_kg: Weight in kilograms (float)
+        - male: Percentage male gender (float, or 0 if genderless)
+        - female: Percentage female gender (float, or 0 if genderless)
+        - hp, attack, defense, sp_atk, sp_def, speed, total: Base stats as integers
     """
-    
-    # Pokemon name
+
+    # Extract Pokemon name from the page header
     poke_name_from_link = poke_content.select('h1')[0].string
-    
-    # Locate the table that contains the data
+
+    # Locate the table with Pokemon vitals and stats
     pokedex_data = poke_content.select('table[class="vitals-table"]')
-    
-    # National Pokedex Number
+
+    # National Pokedex number
     pokedex_num = pokedex_data[0].select('td')[0].contents[0].string
-    
-    # Element type(s)
+
+    # Element types (1 or 2 types)
     elem_type = list(pokedex_data[0].select('td')[1].children)
-    elements = []
-    for x in elem_type:
-        if not str(x).isspace():
-            elements.append(x.string)
+    elements = [x.string for x in elem_type if not str(x).isspace()]
     elem_1 = elements[0]
-    elem_2 = None
-    if len(elements) > 1:  # Sometimes there is more than one type
-        elem_2 = elements[1]
-    
+    elem_2 = elements[1] if len(elements) > 1 else None
+
     # Species
     species = pokedex_data[0].select('td')[2].string
-    
-    # Height
+
+    # Height in meters (strip special characters and convert to float)
     height = pokedex_data[0].select('td')[3].string.replace(u'\xa0','')
     height_meters = float(height.split('m')[0])
 
-    # Weight
+    # Weight in kg (strip special characters and convert to float)
     weight = pokedex_data[0].select('td')[4].string.replace(u'\xa0','')
     weight_kg = float(weight.split('kg')[0])
 
-    # Gender
+    # Gender distribution percentages or genderless
     gender = list(pokedex_data[2].select('td')[1].children)
-    gender_stats = []
-    for x in gender:
-        if not str(x).isspace():
-            gender_stats.append(x.string)
+    gender_stats = [x.string for x in gender if not str(x).isspace()]
 
     if "Genderless" in gender_stats:
-        male = float(0)
-        female = float(0)
+        male = 0.0
+        female = 0.0
     else:
-        male = float(gender_stats[0].split('%')[0])  # Extracts only the percent digits
-        female = float(gender_stats[2].split('%')[0])  # Extracts only the percent digits
+        male = float(gender_stats[0].split('%')[0])
+        female = float(gender_stats[2].split('%')[0])
 
-    # Fighting Stats
+    # Fighting stats (HP, Attack, Defense, etc.)
     hp = int(list(pokedex_data[3].select('tr')[0])[3].string)
     attack = int(list(pokedex_data[3].select('tr')[1])[3].string)
     defense = int(list(pokedex_data[3].select('tr')[2])[3].string)
@@ -175,8 +153,8 @@ def pokemon_scraper(poke_content, pokedex_dict):
     sp_def = int(list(pokedex_data[3].select('tr')[4])[3].string)
     speed = int(list(pokedex_data[3].select('tr')[5])[3].string)
     total = int(list(pokedex_data[3].select('tr')[6])[3].string)
-    
-    # Append elements in the list for each key
+
+    # Append all extracted values to the respective lists in the dictionary
     pokedex_dict['poke_name_from_link'].append(poke_name_from_link)
     pokedex_dict['pokedex_num'].append(pokedex_num)
     pokedex_dict['elem_1'].append(elem_1)
@@ -194,115 +172,55 @@ def pokemon_scraper(poke_content, pokedex_dict):
     pokedex_dict['speed'].append(speed)
     pokedex_dict['total'].append(total)
 
-
-########################################################
-# LOOPING THROUGH ALL URLS AND SCRAPING CONTENT FOR EACH
-########################################################
-# Note: Will take about 17 minutes to scrape and save data for 1000+ Pokemon
+# -------------------------
+# LOOP THROUGH EACH UNIQUE POKEMON URL AND SCRAPE DATA
+# -------------------------
 
 count = 0
 
-# Iterate thru the URL column in link_frame and scrape content
-
 for poke_site in link_frame['url']:
-
-    # Send a get() request to specific Pokemon link
+    """
+    Loop through all Pokemon URLs, scrape each Pokemon page, and extract relevant data.
+    """
+    # Request the page content for this Pokemon
     page = get(poke_site)
 
-    # Parse the content using BeautifulSoup and call the result content
+    # Parse the HTML content
     poke_content = BeautifulSoup(page.content, "html.parser")
-    
-    # Call function
+
+    # Extract and store Pokemon data by calling the scraper function
     pokemon_scraper(poke_content, pokedex_dict)
-    
-    # Counter
+
+    # Increment counter and print progress
     count += 1
     print(f"{count} of {len(link_frame['url'])}")
-    
-    # Print Dictionary -- Only run to test
-    #print(pokedex_dict)
-    
-    # Add sleeper timer for 1 seconds
-    time.sleep(1)
-    
-####################################################
-# CREATING AND MERGING DATAFRAME OF LINKS AND STATS
-####################################################
 
-# Pokedex DataFrame
+    # Sleep for 1 second between requests to be polite to the server
+    time.sleep(1)
+
+# -------------------------
+# CONVERT DICTIONARY TO DATAFRAME AND SAVE AS CSV
+# -------------------------
+
+# Create a DataFrame from the scraped Pokemon data dictionary
 pokedex_df = pd.DataFrame(pokedex_dict)
 
-# Ensuring `pokedex_df['pokedex_num']` stays as a str datatype
+# Ensure pokedex_num is a string (not integer)
 pokedex_df['pokedex_num'] = pokedex_df['pokedex_num'].astype(str)
 
-pokedex_df
+# Merge the basic Pokemon info with detailed stats on 'pokemon' name
+merged_df = pd.merge(link_frame, pokedex_df, left_on="pokemon", right_on="poke_name_from_link")
 
-# Merge `link_frame` (df with pokemon name and URL) with `pokedex_df` (df with pokemon name and stats)
-
-merged_df = pd.merge(link_frame, pokedex_df, left_on = "pokemon", right_on = "poke_name_from_link")
+# Drop duplicate 'poke_name_from_link' column after merge
 final_df = merged_df.drop(columns=["poke_name_from_link"])
 
-final_df
-
-####################################################
-# CONVERT TO .CSV FILE AND THEN READ .CSV BACK IN
-####################################################
-
-# CONVERT TO .CSV
-# Save and Export `final_df` as .csv
+# Save the final DataFrame to a CSV file
 file_name = "pokemon_db.csv"
 final_df.to_csv(file_name, index=False)
 
-# READ .CSV BACK IN
+# -------------------------
+# READ CSV BACK INTO PANDAS (to verify or further process)
+# -------------------------
+
 pokemon_csv = pd.read_csv(file_name)
 pokemon_csv
-
-####################################################
-# CHECKING DATA TYPES FOR DATAFRAME AND .CSV FILE
-####################################################
-
-# Checking Data Types -- For `final_df`
-print("---------Data Types for `final_df` Dataframe--------")
-print(f"The 'pokemon' column contains type {type(final_df['pokemon'][0])}")
-print(f"The 'url' column contains type {type(final_df['url'][0])}")
-print(f"The 'pokedex_num' column contains type {type(final_df['pokedex_num'][0])}")
-print(f"The 'elem_1' column contains type {type(final_df['elem_1'][0])}")
-print(f"The 'elem_2' column contains type {type(final_df['elem_2'][0])}")
-print(f"The 'species' column contains type {type(final_df['species'][0])}")
-print(f"The 'height_meters' column contains type {type(final_df['height_meters'][0])}")
-print(f"The 'weight_kg' column contains type {type(final_df['weight_kg'][0])}")
-print(f"The 'male' column contains type {type(final_df['male'][0])}")
-print(f"The 'female' column contains type {type(final_df['female'][0])}")
-print(f"The 'hp' column contains type {type(final_df['hp'][0])}")
-print(f"The 'attack' column contains type {type(final_df['attack'][0])}")
-print(f"The 'defense' column contains type {type(final_df['defense'][0])}")
-print(f"The 'sp_atk' column contains type {type(final_df['sp_atk'][0])}")
-print(f"The 'sp_def' column contains type {type(final_df['sp_def'][0])}")
-print(f"The 'speed' column contains type {type(final_df['speed'][0])}")
-print(f"The 'total' column contains type {type(final_df['total'][0])}")
-
-print("\n")
-
-# Checking Data Types -- For `pokemon_csv`
-print("---------Data Types for `pokemon_csv` Dataframe--------")
-print(f"The 'pokemon' column contains type {type(pokemon_csv['pokemon'][0])}")
-print(f"The 'url' column contains type {type(pokemon_csv['url'][0])}")
-print(f"The 'pokedex_num' column contains type {type(pokemon_csv['pokedex_num'][0])}")
-print(f"The 'elem_1' column contains type {type(pokemon_csv['elem_1'][0])}")
-print(f"The 'elem_2' column contains type {type(pokemon_csv['elem_2'][0])}")
-print(f"The 'species' column contains type {type(pokemon_csv['species'][0])}")
-print(f"The 'height_meters' column contains type {type(pokemon_csv['height_meters'][0])}")
-print(f"The 'weight_kg' column contains type {type(pokemon_csv['weight_kg'][0])}")
-print(f"The 'male' column contains type {type(pokemon_csv['male'][0])}")
-print(f"The 'female' column contains type {type(pokemon_csv['female'][0])}")
-print(f"The 'hp' column contains type {type(pokemon_csv['hp'][0])}")
-print(f"The 'attack' column contains type {type(pokemon_csv['attack'][0])}")
-print(f"The 'defense' column contains type {type(pokemon_csv['defense'][0])}")
-print(f"The 'sp_atk' column contains type {type(pokemon_csv['sp_atk'][0])}")
-print(f"The 'sp_def' column contains type {type(pokemon_csv['sp_def'][0])}")
-print(f"The 'speed' column contains type {type(pokemon_csv['speed'][0])}")
-print(f"The 'total' column contains type {type(pokemon_csv['total'][0])}")
-
-# Note: The values in 'pokedex_num' could be considered a str (because it has leading zeros)
-# When the 'final_df' is converted into .csv, it retains the leading zeros
-# However, when it is read back in using `pd.read_csv`, the 'pokedex_num' column is converted into numpy.inst64
