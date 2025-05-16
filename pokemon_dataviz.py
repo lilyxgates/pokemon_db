@@ -7,6 +7,7 @@
 # Creates different data visualizations
 # ============================================
 
+# --------------------------------------------
 # Import required packages
 import os
 from datetime import datetime
@@ -21,6 +22,10 @@ import matplotlib.ticker as mtick
 import matplotlib.image as mpimg
 
 import seaborn as sns
+
+from wordcloud import WordCloud
+from collections import Counter
+
 
 # --------------------------------------------
 # STEP 1: Load in Dataset
@@ -76,6 +81,11 @@ plt.rcParams.update(custom_style)
 # ----------------------------------------------------------------------------------------
 ## 1. Relationship Between Height and Weight in Pokémon (Scatterplot with Regression Line)
 # ----------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------
+### 1a. Scatterplot with Regression Line
+# ----------------------------------------------------------------------------------------
+
 # Original data
 x = pokemon_csv['weight_kg']
 y = pokemon_csv['height_meters']
@@ -166,6 +176,54 @@ fig.savefig(save_path, bbox_inches='tight')
 print(f"Graph saved to: {save_path}")
 
 plt.show()
+
+# ----------------------------------------------------------------------------------------
+### 1b. Histogram Distribution of Pokémon Height and Weight (Square Root Transformed)
+# ----------------------------------------------------------------------------------------
+# Original data
+heights = pokemon_csv['height_meters']
+weights = pokemon_csv['weight_kg']
+
+# Add small epsilon to avoid sqrt of zero
+epsilon = 1e-6
+heights_sqrt = np.sqrt(heights + epsilon)
+weights_sqrt = np.sqrt(weights + epsilon)
+
+# Create figure with 2 vertical subplots
+fig, axes = plt.subplots(2, 1, figsize=(10, 10), sharex=False)
+
+# Top plot: Histogram of square root transformed heights
+sns.histplot(heights_sqrt, bins=30, kde=False, color='mediumseagreen', ax=axes[0])
+axes[0].set_title('Distribution of Pokémon Heights (m)', fontsize=16, weight='bold')
+axes[0].set_xlabel('')
+axes[0].set_ylabel('Count', fontsize=14)
+axes[0].grid(False)
+
+# Bottom plot: Histogram of square root transformed weights
+sns.histplot(weights_sqrt, bins=30, kde=False, color='steelblue', ax=axes[1])
+axes[1].set_title('Distribution of Pokémon Weights (kg)', fontsize=16, weight='bold')
+axes[1].set_xlabel('Square Root of Value', fontsize=14)
+axes[1].set_ylabel('Count', fontsize=14)
+axes[1].grid(False)
+
+# Overall figure title and subtitle
+fig.suptitle("\nDistributions of Pokémon Heights and Weights\nAfter Square Root Transformations",
+             fontsize=24, weight='bold', y=1.05)
+
+fig.text(0.5, .90, 'Reducing Skewness to Better Visualize Size Variations Across Species',
+         ha='center', fontsize=18, style='italic')
+
+
+plt.tight_layout()
+
+# Save File
+filename = "height_weight_distrib_histogram.png"
+save_path = os.path.join("pokemon_graphs", filename)
+fig.savefig(save_path, bbox_inches='tight')
+print(f"Graph saved to: {save_path}")
+
+plt.show()
+
 
 # ----------------------------------------------------------------------------------------
 ## 2. Base Stat Distribution (Histogram)
@@ -611,6 +669,39 @@ print(f"Graph saved to: {save_path}")
 
 plt.show()
 
+# WORD CLOUD
+
+# Build frequency dict for a stat's top 10 Pokémon with weights (higher rank = higher count)
+def build_freq_dict(pokemon_list):
+    freq_dict = {}
+    for rank, name in enumerate(pokemon_list, start=1):
+        freq_dict[name] = 11 - rank  # rank 1 -> 10, rank 10 -> 1
+    return freq_dict
+
+# Example for combined all stats
+combined_freq = Counter()
+
+for stat in stats:
+    top10 = pokemon_csv.sort_values(stat, ascending=False).head(10)['pokemon'].tolist()
+    freq_dict = build_freq_dict(top10)
+    combined_freq.update(freq_dict)
+
+# Generate wordcloud from frequencies directly
+wordcloud = WordCloud(width=800, height=400, background_color='white', colormap='viridis').generate_from_frequencies(combined_freq)
+
+plt.figure(figsize=(14, 7))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.suptitle('\nCombined Top 10 Pokémon by Base Stat Categories', fontsize=22, weight='bold', y = 1)
+
+
+filename = "word_cloud_top_10_by_base_stat.png"
+save_path = os.path.join("pokemon_graphs", filename)
+fig.savefig(save_path, bbox_inches='tight')
+print(f"Graph saved to: {save_path}")
+
+plt.show()
+
 # ----------------------------------------------------------------------------------------
 ## 8. Top 10 Pokémon by Total Base Stat, Grouped by Elemental Type
 # # ----------------------------------------------------------------------------------------
@@ -670,6 +761,7 @@ fig.savefig(save_path, bbox_inches='tight')
 print(f"Graph saved to: {save_path}")
 
 plt.show()
+
 
 # # ----------------------------------------------------------------------------------------
 ### 8b. Grouped by Primary ONLY Elemental Type
@@ -731,6 +823,85 @@ plt.tight_layout(rect=[0, 0, 1, 0.94])
 
 # Save file
 filename = "top_10_total_stats_by_primary_only_elements.png"
+save_path = os.path.join("pokemon_graphs", filename)
+fig.savefig(save_path, bbox_inches='tight')
+print(f"Graph saved to: {save_path}")
+
+plt.show()
+
+# # ----------------------------------------------------------------------------------------
+### 8c. Word Cloud of All Top Pokemon
+# # ----------------------------------------------------------------------------------------
+
+# WORD CLOUD
+
+# ------------------------------------------------------
+# Get top 10 Pokémon from both grouping strategies
+# ------------------------------------------------------
+
+# Primary + Secondary
+all_top_pokemon_both = []
+for elem in pokemon_csv['elem_1'].dropna().unique():
+    subset = pokemon_csv[(pokemon_csv['elem_1'] == elem) | (pokemon_csv['elem_2'] == elem)]
+    top10 = subset.sort_values('total', ascending=False).head(10)
+    all_top_pokemon_both.extend(top10['pokemon'].values)
+counts_both = Counter(all_top_pokemon_both)
+
+# Primary Only
+all_top_pokemon_primary = []
+for elem in pokemon_csv['elem_1'].dropna().unique():
+    subset = pokemon_csv[pokemon_csv['elem_1'] == elem]
+    top10 = subset.sort_values('total', ascending=False).head(10)
+    all_top_pokemon_primary.extend(top10['pokemon'].values)
+counts_primary = Counter(all_top_pokemon_primary)
+
+# Combined
+counts_combined = counts_both + counts_primary
+
+# ------------------------------------------------------
+# Create WordClouds
+# ------------------------------------------------------
+
+wc_both = WordCloud(width=800, height=500, background_color='white', colormap='viridis')
+wc_both.generate_from_frequencies(counts_both)
+
+wc_primary = WordCloud(width=800, height=500, background_color='white', colormap='plasma')
+wc_primary.generate_from_frequencies(counts_primary)
+
+wc_combined = WordCloud(width=800, height=500, background_color='white', colormap='inferno')
+wc_combined.generate_from_frequencies(counts_combined)
+
+# ------------------------------------------------------
+# Display side-by-side-by-side
+# ------------------------------------------------------
+
+fig, axs = plt.subplots(1, 3, figsize=(36, 10))
+
+axs[0].imshow(wc_both, interpolation='bilinear')
+axs[0].axis('off')
+axs[0].set_title("Primary + Secondary Types", fontsize=24, weight='bold')
+
+axs[1].imshow(wc_primary, interpolation='bilinear')
+axs[1].axis('off')
+axs[1].set_title("Primary Types Only", fontsize=24, weight='bold')
+
+axs[2].imshow(wc_combined, interpolation='bilinear')
+axs[2].axis('off')
+axs[2].set_title("Combined Word Cloud\nAcross Both Groupings", fontsize=24, weight='bold')
+
+
+# Main title and subtitle
+fig.suptitle('\nTop 10 Pokémon by Total Base Stat\nGrouped by Elemental Types',
+             fontsize=32, weight='bold', y=1.1)
+
+fig.text(0.5, 0.92,
+         'Ranking Pokémon by total base stats within elemental types',
+         ha='center', fontsize=26, style='italic')
+
+plt.tight_layout()
+
+# Save combined figure
+filename = "wordcloud_comparison_primary_secondary_combined.png"
 save_path = os.path.join("pokemon_graphs", filename)
 fig.savefig(save_path, bbox_inches='tight')
 print(f"Graph saved to: {save_path}")
